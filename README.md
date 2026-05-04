@@ -1,4 +1,4 @@
-\# Deep Sky Viewer
+# Deep Sky Viewer
 
 
 
@@ -8,103 +8,103 @@ Explore procedurally generated galaxies, nebulae, and star clusters through a co
 
 
 
-!\[Game Preview](demo/game.mp4)
+![Game Preview](demo/game.mp4)
 
-!\[DSO Example](demo/dso.png)
+![DSO Example](demo/dso.png)
 
 
 
-\---
+---
 
 
 
-\## Features
+## Features
 
 
 
-\* Real-time procedural generation of deep-sky objects
+* Real-time procedural generation of deep-sky objects
 
 
 
-&#x20; \* Galaxies
+&#x20; * Galaxies
 
-&#x20; \* Nebulae
+&#x20; * Nebulae
 
-&#x20; \* Open and globular star clusters
+&#x20; * Open and globular star clusters
 
-\* Interactive telescope system with zoom and aiming
+* Interactive telescope system with zoom and aiming
 
-\* Free-roam first-person exploration
+* Free-roam first-person exploration
 
-\* Stylized low-poly environment with atmospheric lighting
+* Stylized low-poly environment with atmospheric lighting
 
-\* Exaggerated, artistic deep-sky rendering inspired by EAA-style observations
+* Exaggerated, artistic deep-sky rendering inspired by EAA-style observations
 
-\* Modular architecture designed for future optical simulation (lens effects, sensor response, distortion)
+* Modular architecture designed for future optical simulation (lens effects, sensor response, distortion)
 
 
 
-\---
+---
 
 
 
-\## Controls
+## Controls
 
 
 
-\### Movement
+### Movement
 
 
 
-\* WASD – Move
+* WASD – Move
 
-\* Shift – Sprint
+* Shift – Sprint
 
-\* Mouse – Look around
+* Mouse – Look around
 
 
 
-\### Telescope Interaction
+### Telescope Interaction
 
 
 
-\* E – Enter / Exit telescope mode
+* E – Enter / Exit telescope mode
 
-\* F – Enter / Exit eyepiece view
+* F – Enter / Exit eyepiece view
 
-\* Mouse – Aim telescope
+* Mouse – Aim telescope
 
 
 
-\---
+---
 
 
 
-\## Tech Stack
+## Tech Stack
 
 
 
-\* Engine: Unity
+* Engine: Unity
 
-\* Render Pipeline: Universal Render Pipeline (URP)
+* Render Pipeline: Universal Render Pipeline (URP)
 
-\* Language: C#
+* Language: C#
 
-\* Generation: Procedural noise (Perlin / FBM-based systems)
+* Generation: Procedural noise (Perlin / FBM-based systems)
 
-\* Rendering: Real-time generated textures for deep-sky objects
+* Rendering: Real-time generated textures for deep-sky objects
 
 
 
-\---
+---
 
 
 
-\## Getting Started
+## Getting Started
 
 
 
-\### 1. Clone the repo
+### 1. Clone the repo
 
 
 
@@ -118,11 +118,11 @@ cd deep-sky-viewer
 
 
 
-\---
+---
 
 
 
-\### 2. Open in Unity
+### 2. Open in Unity
 
 
 
@@ -130,11 +130,11 @@ Open the project in a compatible Unity version with URP enabled.
 
 
 
-\---
+---
 
 
 
-\### 3. Load the scene
+### 3. Load the scene
 
 
 
@@ -146,11 +146,11 @@ Then press Play.
 
 
 
-\---
+---
 
 
 
-\## Project Structure
+## Project Structure
 
 
 
@@ -188,57 +188,57 @@ DeepSkyViewer/
 
 
 
-\---
+---
 
 
 
-\## Planned Features
+## Planned Features
 
 
 
-\* Telescope optical simulation system
+* Telescope optical simulation system
 
 
 
-&#x20; \* Lens types and aberrations
+&#x20; * Lens types and aberrations
 
-&#x20; \* Sensor noise and exposure simulation
+&#x20; * Sensor noise and exposure simulation
 
-\* Atmospheric seeing effects
+* Atmospheric seeing effects
 
-\* Improved sky navigation system
+* Improved sky navigation system
 
-\* More advanced procedural sky layering
+* More advanced procedural sky layering
 
-\* Post-processing per telescope type
-
-
-
-\---
+* Post-processing per telescope type
 
 
 
-\## Design Goals
+---
 
 
 
-\* Relaxing, meditative exploration experience
-
-\* No objectives or progression systems
-
-\* Focus on observation and atmosphere
-
-\* Procedural content ensuring infinite variation
-
-\* Blend of stylized visuals with astronomy-inspired structure
+## Design Goals
 
 
 
-\---
+* Relaxing, meditative exploration experience
+
+* No objectives or progression systems
+
+* Focus on observation and atmosphere
+
+* Procedural content ensuring infinite variation
+
+* Blend of stylized visuals with astronomy-inspired structure
 
 
 
-\## License
+---
+
+
+
+## License
 
 
 
