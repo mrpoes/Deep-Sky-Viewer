@@ -1,0 +1,339 @@
+#pragma kernel GenerateNebula
+#pragma kernel GenerateGalaxy
+#pragma kernel GenerateCluster
+
+RWTexture2D<float4> Result;
+int Size;
+float Seed;
+
+// --- NEBULA PARAMS ---
+float2 LobeOffset;
+float2 StarClusterPos;
+int NumStars;
+float4 StarPositions[8];
+float StarSizes[8];
+int NumPillars;
+float PillarAngles[5];
+float PillarLengths[5];
+float PillarWidths[5];
+float OiiiStrength;
+float NebulaScale;
+
+// --- GALAXY PARAMS ---
+int NumArms;
+float SpiralTightness;
+float ArmBrightnesses[4];
+float BarLength;
+float BarWidth;
+
+
+// Helper: angle delta in degrees, returns value in -180..180
+float DeltaAngle(float current, float target)
+{
+    float delta = fmod(target - current, 360.0);
+    if (delta > 180.0)  delta -= 360.0;
+    if (delta < -180.0) delta += 360.0;
+    return delta;
+}
+
+// =====================
+// NOISE FUNCTIONS
+// =====================
+
+float2 fade(float2 t) { return t * t * t * (t * (t * 6.0 - 15.0) + 10.0); }
+
+float4 permute(float4 x) { return fmod(34.0 * x * x + x, 289.0); }
+
+float perlinNoise(float2 P)
+{
+    float4 Pi = floor(float4(P.x, P.y, P.x, P.y)) + float4(0, 0, 1, 1);
+    float4 Pf = frac(float4(P.x, P.y, P.x, P.y)) - float4(0, 0, 1, 1);
+    Pi = fmod(Pi, 289.0);
+    float4 ix = Pi.xzxz;
+    float4 iy = Pi.yyww;
+    float4 fx = Pf.xzxz;
+    float4 fy = Pf.yyww;
+    float4 i = permute(permute(ix) + iy);
+    float4 gx = frac(i / 41.0) * 2.0 - 1.0;
+    float4 gy = abs(gx) - 0.5;
+    float4 tx = floor(gx + 0.5);
+    gx = gx - tx;
+    float2 g00 = float2(gx.x, gy.x);
+    float2 g10 = float2(gx.y, gy.y);
+    float2 g01 = float2(gx.z, gy.z);
+    float2 g11 = float2(gx.w, gy.w);
+    float4 norm = 1.79284291400159 - 0.85373472095314 * float4(dot(g00,g00), dot(g01,g01), dot(g10,g10), dot(g11,g11));
+    g00 *= norm.x; g01 *= norm.y; g10 *= norm.z; g11 *= norm.w;
+    float n00 = dot(g00, float2(fx.x, fy.x));
+    float n10 = dot(g10, float2(fx.y, fy.y));
+    float n01 = dot(g01, float2(fx.z, fy.z));
+    float n11 = dot(g11, float2(fx.w, fy.w));
+    float2 fade_xy = fade(Pf.xy);
+    float2 n_x = lerp(float2(n00, n01), float2(n10, n11), fade_xy.x);
+    float n_xy = lerp(n_x.x, n_x.y, fade_xy.y);
+    return 0.5 + 0.5 * n_xy; // remap to 0..1
+}
+
+float fbm(float x, float y, int octaves)
+{
+    float value = 0.0;
+    float amplitude = 0.5;
+    float frequency = 1.0;
+    for (int i = 0; i < octaves; i++)
+    {
+        value += perlinNoise(float2(x * frequency, y * frequency)) * amplitude;
+        frequency *= 2.0;
+        amplitude *= 0.5;
+    }
+    return value;
+}
+
+// =====================
+// NEBULA KERNEL
+// =====================
+[numthreads(8,8,1)]
+void GenerateNebula(uint3 id : SV_DispatchThreadID)
+{
+    if ((int)id.x >= Size || (int)id.y >= Size) return;
+
+    float nx = ((float)id.x - Size * 0.5f) / (Size * 0.5f);
+    float ny = ((float)id.y - Size * 0.5f) / (Size * 0.5f);
+
+    // initial domain warp
+    float warp = fbm(nx * 2.0 + Seed, ny * 2.0 + Seed, 3) - 0.5;
+    nx += warp * 0.05;
+    ny += warp * 0.05;
+
+    float unx = nx / NebulaScale;
+    float uny = ny / NebulaScale;
+
+    // domain warp pass 1
+    float warpX = fbm(unx * 2.0 + Seed,       uny * 2.0 + Seed,       4) - 0.5;
+    float warpY = fbm(unx * 2.0 + Seed + 5.2, uny * 2.0 + Seed + 5.2, 4) - 0.5;
+    float wx = unx + warpX * 0.35;
+    float wy = uny + warpY * 0.35;
+
+    // domain warp pass 2
+    float warp2X = fbm(wx * 3.0 + Seed + 1.7, wy * 3.0 + Seed + 1.7, 3) - 0.5;
+    float warp2Y = fbm(wx * 3.0 + Seed + 8.3, wy * 3.0 + Seed + 8.3, 3) - 0.5;
+    wx += warp2X * 0.15;
+    wy += warp2Y * 0.15;
+
+    float lx = wx - LobeOffset.x;
+    float ly = wy - LobeOffset.y;
+    float lobeDist = sqrt(lx * lx + ly * ly);
+
+    // --- LAYER 1: BASE CLOUD ---
+    float cloudFBM = fbm(wx * 2.5 + Seed, wy * 2.5 + Seed, 6);
+    float cloudShape = saturate(1.0 - pow(lobeDist * 1.4, 1.2));
+    cloudShape *= cloudFBM * 1.8;
+    cloudShape = saturate(cloudShape);
+
+    float lx2 = wx - LobeOffset.x * 0.3 + 0.2;
+    float ly2 = wy - LobeOffset.y * 0.3 - 0.15;
+    float lobeDist2 = sqrt(lx2 * lx2 + ly2 * ly2);
+    float cloudShape2 = saturate(1.0 - pow(lobeDist2 * 2.2, 1.4));
+    cloudShape2 *= fbm(wx * 3.0 + Seed + 3.0, wy * 3.0 + Seed + 3.0, 4) * 1.5;
+    cloudShape2 = saturate(cloudShape2);
+
+    float totalCloud = saturate(cloudShape * 0.75 + cloudShape2 * 0.4);
+
+    // --- LAYER 2: Ha EMISSION ---
+    float ridgeA = 1.0 - abs(perlinNoise(float2(wx * 4.0  + Seed,       wy * 4.0  + Seed      )) * 2.0 - 1.0);
+    float ridgeB = 1.0 - abs(perlinNoise(float2(wx * 8.0  + Seed + 2.0, wy * 8.0  + Seed + 2.0)) * 2.0 - 1.0);
+    float ridgeC = 1.0 - abs(perlinNoise(float2(wx * 16.0 + Seed + 4.0, wy * 16.0 + Seed + 4.0)) * 2.0 - 1.0);
+    float ridgedFBM = (ridgeA + ridgeB * 0.5 + ridgeC * 0.25) / 1.75;
+
+    float haEmission = saturate(totalCloud * ridgedFBM * 1.5);
+
+    // --- LAYER 3: OIII ---
+    float sx = wx - StarClusterPos.x;
+    float sy = wy - StarClusterPos.y;
+    float starDist = sqrt(sx * sx + sy * sy);
+    float oiiiFalloff = saturate(1.0 - pow(starDist * 3.0, 1.5));
+    float oiiiNoise = fbm(wx * 5.0 + Seed + 10.0, wy * 5.0 + Seed + 10.0, 3);
+    float oiiiRegion = saturate(oiiiFalloff * oiiiNoise * OiiiStrength * totalCloud);
+
+    // --- LAYER 4: DUST PILLARS ---
+    float dustMask = 0.0;
+    float pillarRimGlow = 0.0;
+
+    for (int p = 0; p < NumPillars; p++)
+    {
+        float edgeX = LobeOffset.x + cos(PillarAngles[p]) * 0.7;
+        float edgeY = LobeOffset.y + sin(PillarAngles[p]) * 0.7;
+
+        float dirX = StarClusterPos.x - edgeX;
+        float dirY = StarClusterPos.y - edgeY;
+        float dirLen = sqrt(dirX * dirX + dirY * dirY) + 0.0001;
+        dirX /= dirLen;
+        dirY /= dirLen;
+
+        float px2 = wx - edgeX;
+        float py2 = wy - edgeY;
+        float along = px2 * dirX + py2 * dirY;
+        float perp  = px2 * (-dirY) + py2 * dirX;
+
+        float t2 = saturate(along / PillarLengths[p]);
+        float taper = PillarWidths[p] * (1.0 - t2 * 0.6);
+        float pillarNoise = fbm(wx * 8.0 + Seed + p * 3.0, wy * 8.0 + Seed + p * 3.0, 3);
+        taper *= 0.7 + 0.6 * pillarNoise;
+
+        if (along > 0.0 && along < PillarLengths[p])
+        {
+            float pillarDist2 = abs(perp) / max(taper, 0.0001);
+            float pillarVal = saturate(1.0 - pillarDist2);
+            dustMask = max(dustMask, pillarVal);
+
+            float rimStrength = saturate(1.0 - abs(perp - taper * 0.8) / max(taper * 0.3, 0.0001));
+            rimStrength *= saturate(1.0 - t2);
+            pillarRimGlow = max(pillarRimGlow, rimStrength * 0.6);
+        }
+    }
+
+    // --- LAYER 5: WISPS ---
+    float curlX = fbm(wx * 1.5 + Seed + 15.0, wy * 1.5 + Seed + 15.0, 4)
+                - fbm(wx * 1.5 + Seed + 15.0, wy * 1.5 + Seed + 20.0, 4);
+    float curlY = fbm(wx * 1.5 + Seed + 20.0, wy * 1.5 + Seed + 15.0, 4)
+                - fbm(wx * 1.5 + Seed + 25.0, wy * 1.5 + Seed + 20.0, 4);
+    float curlMag = sqrt(curlX * curlX + curlY * curlY);
+    float wispFalloff = saturate(1.0 - pow(lobeDist * 0.9, 2.0));
+    float wisps = saturate(curlMag * wispFalloff * 0.3);
+
+    // --- LAYER 6: EMBEDDED STARS ---
+    float starBloom = 0.0;
+    for (int s = 0; s < NumStars; s++)
+    {
+        float stx = nx - StarPositions[s].x;
+        float sty = ny - StarPositions[s].y;
+        float stDist = sqrt(stx * stx + sty * sty);
+        float starCore = saturate(1.0 - stDist / max(StarSizes[s], 0.0001));
+        float starHalo = saturate(1.0 - stDist / max(StarSizes[s] * 4.0, 0.0001)) * 0.3;
+        starBloom = max(starBloom, starCore + starHalo);
+    }
+
+    // --- ALPHA ---
+    float density = haEmission * 2.5 + wisps * 0.5 + starBloom * 0.5;
+    float alpha = 1.0 - exp(-density * 2.5);
+    float edgeNoise = fbm(wx * 1.2 + Seed + 30.0, wy * 1.2 + Seed + 30.0, 4);
+    float irregularEdge = saturate(1.0 - pow(abs(lobeDist * (1.2 + edgeNoise * 0.8)), 2.5));    alpha *= irregularEdge;
+    alpha = saturate(alpha);
+    alpha *= (1.0 - dustMask * 0.92);
+    alpha = saturate(alpha + pillarRimGlow * 0.4);
+
+    // --- COLOR ---
+    float3 nebulaCol = lerp(float3(0.7, 0.15, 0.2), float3(1.0, 0.45, 0.5), haEmission);
+    nebulaCol += float3(0.2, 0.5, 0.9) * oiiiRegion;
+    nebulaCol += float3(0.6, 0.2, 0.35) * wisps;
+    nebulaCol += float3(1.0, 0.7, 0.4) * pillarRimGlow;
+    nebulaCol += float3(0.8, 0.9, 1.0) * starBloom * 2.0;
+    nebulaCol *= (1.0 - dustMask * 0.7);
+    nebulaCol = saturate(nebulaCol);
+
+    Result[id.xy] = float4(nebulaCol, alpha);
+}
+
+// =====================
+// GALAXY KERNEL
+// =====================
+[numthreads(8,8,1)]
+void GenerateGalaxy(uint3 id : SV_DispatchThreadID)
+{
+    if ((int)id.x >= Size || (int)id.y >= Size) return;
+
+    float nx = ((float)id.x - Size * 0.5f) / (Size * 0.5f);
+    float ny = ((float)id.y - Size * 0.5f) / (Size * 0.5f);
+
+    float warp = fbm(nx * 2.0 + Seed, ny * 2.0 + Seed, 3) - 0.5;
+    nx += warp * 0.05;
+    ny += warp * 0.05;
+
+    float dist = sqrt(nx * nx + ny * ny);
+    float angle = atan2(ny, nx);
+    float angleDeg = degrees(angle);
+
+    float diskScale = 0.35;
+    float bulgeSize = 0.08;
+    float disk  = exp(-dist / diskScale);
+    float bulge = exp(-pow(abs(dist / bulgeSize), 1.5));
+
+    float breakNoise    = fbm(nx * 6.0 + Seed + 20.0, ny * 6.0 + Seed + 20.0, 4);
+    float breakMaskBase = saturate((breakNoise - 0.3) * 2.0);
+    float fractalNoise  = fbm(nx * 4.0 + Seed, ny * 4.0 + Seed, 5);
+
+    float armMask = 0.0;
+    for (int arm = 0; arm < NumArms; arm++)
+    {
+        float armOffset     = (arm / (float)NumArms) * 3.14159265 * 2.0;
+        float armSeedOffset = Seed + arm * 5.0;
+        float expectedAngle = log(dist + 0.0001) * SpiralTightness + armOffset;
+        float spiralNoise   = fbm(nx * 3.0 + armSeedOffset, ny * 3.0 + armSeedOffset, 3);
+        expectedAngle      += (spiralNoise - 0.5) * 1.2;
+
+        // compare angles directly in radians, no DeltaAngle needed
+        float angleDiff = angle - expectedAngle;
+
+        // wrap to -PI..PI
+        angleDiff = angleDiff - 6.28318530 * floor((angleDiff + 3.14159265) / 6.28318530);
+        float diff = abs(angleDiff); // radians, NOT degrees
+
+        float localNoise = perlinNoise(float2(nx * 4.0 + Seed + arm * 10.0, ny * 4.0 + Seed + arm * 10.0));
+        float armVal = exp(-diff * 1.5) * ArmBrightnesses[arm];
+        armVal *= lerp(0.5, 1.5, localNoise);
+        armMask = max(armMask, armVal);
+    }
+
+    // armMask *= breakMaskBase;
+    armMask *= lerp(0.6, 1.2, fractalNoise);
+
+    float clumpNoise = perlinNoise(float2(nx * 30.0 + Seed, ny * 30.0 + Seed));
+    float clump      = clumpNoise > 0.92 ? 1.0 : 0.0;
+    float hii        = clump * armMask * disk * 2.5;
+
+    float dustNoise = fbm(nx * 8.0 + Seed + 100.0, ny * 8.0 + Seed + 100.0, 5);
+    float dust      = pow(dustNoise, 4.0) * disk * armMask;
+    float dustCut   = saturate(dust * 1.5);
+
+    float youngStars = armMask * (1.0 - dist);
+
+    // float density = disk * 0.1 + armMask * disk * 2.8 + bulge * 2.2;
+    float density = disk * 0.2 + armMask * disk * 4.0 + bulge * 3.0;
+    density *= (1.0 - dustCut);
+
+    float starNoise  = perlinNoise(float2(nx * 200.0 + Seed, ny * 200.0 + Seed));
+    float smallStars = pow(starNoise, 20.0);
+    float brightStars= pow(starNoise, 40.0);
+
+    float alpha    = 1.0 - exp(-density * 3.0);
+    float edgeFade = saturate(1.0 - pow(dist, 4.0));
+    alpha         *= edgeFade;
+
+    float3 col = float3(0.9, 0.9, 1.0);
+    col = lerp(col, float3(1.0, 0.8, 0.5), saturate(bulge * 1.2));
+    col = lerp(col, float3(0.4, 0.6, 1.0), armMask);
+    col = lerp(col, float3(1.0, 0.2, 0.3), saturate(hii * 1.5));
+    col = lerp(col, float3(0.5, 0.7, 1.0), saturate(youngStars * 0.6));
+    col += float3(1.0, 0.95, 0.9) * smallStars * 1.5;
+    col += float3(1.0, 1.0,  1.0) * brightStars * 4.0;
+    col *= (1.0 - dustCut * 0.8);
+    col  = saturate(col);
+
+    Result[id.xy] = float4(col, alpha);
+}
+
+// =====================
+// CLUSTER KERNEL
+// =====================
+[numthreads(8,8,1)]
+void GenerateCluster(uint3 id : SV_DispatchThreadID)
+{
+    if ((int)id.x >= Size || (int)id.y >= Size) return;
+
+    float nx = ((float)id.x - Size * 0.5f) / (Size * 0.5f);
+    float ny = ((float)id.y - Size * 0.5f) / (Size * 0.5f);
+    float dist = sqrt(nx * nx + ny * ny);
+
+    float alpha = saturate((1.0 - dist) * 1.5) * (dist < 0.9 ? 1.0 : 0.0) * 0.85;
+    Result[id.xy] = float4(1.0, 1.0, 1.0, alpha);
+}
+
