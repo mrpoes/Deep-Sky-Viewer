@@ -14308,10 +14308,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DSOManager
   sphereRadius: 1900
-  nebulaCount: 20
-  galaxyCount: 20
-  openClusterCount: 20
-  globClusterCount: 20
+  nebulaCount: 100
+  galaxyCount: 100
+  openClusterCount: 40
+  globClusterCount: 40
 --- !u!1001 &1706884954
 PrefabInstance:
   m_ObjectHideFlags: 0
