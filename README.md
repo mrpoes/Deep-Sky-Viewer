@@ -8,9 +8,9 @@ Explore procedurally generated galaxies, nebulae, and star clusters through a co
 
 
 
-![Game Preview](demo/game.mp4)
+![Video](demo/game.gif)
 
-![DSO Example](demo/dso.png)
+![DSOs](demo/dso.png)
 
 
 
