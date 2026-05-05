@@ -138,7 +138,7 @@ Open the project in a compatible Unity version with URP enabled.
 
 
 
-Assets/Scenes/Main.unity
+Assets/SimpleNaturePack/Scenes/TelescopeGame.unity
 
 
 
